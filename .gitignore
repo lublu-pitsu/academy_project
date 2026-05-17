@@ -1,0 +1,86 @@
+# Виртуальное окружение
+venv/
+env/
+ENV/
+.venv/
+venv*/
+env*/
+
+# Файлы Python (кэш и скомпилированные байт-коды)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyc
+
+# Базы данных
+*.sqlite3
+db.sqlite3
+db.sqlite3-journal
+
+# Миграции (игнорируем все, кроме __init__.py)
+*/migrations/*.py
+!*/migrations/__init__.py
+*/migrations/*.pyc
+
+# Статика и медиафайлы
+staticfiles/
+static/
+media/
+*.log
+
+# Переменные окружения и секреты
+.env
+.env.local
+.env.production
+.env.*.local
+*.key
+*.pem
+
+# IDEs и редакторы
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.suo
+*.user
+
+# Тесты и покрытие
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+.mypy_cache/
+.coverage.*
+.coverage
+
+# Логи
+*.log
+debug.log
+error.log
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+celerybeat-schedule
+*.pid
+
+# Django
+*.pot
+local_settings.py
+settings_local.py
+
+# Файлы отладки
+*.pid
+*.pid.lock
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Бэкапы
+*.bak
+*.backup
+*.orig
