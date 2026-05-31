@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>{{ subject.name }}</h2>
+            <p class="text-muted mb-0">Ведомость задолженностей</p>
+        </div>
+        <a href="{% url 'teacher_subjects' %}" class="btn btn-outline-primary rounded-pill">
+            <i class="fa-solid fa-arrow-left me-1"></i>Назад к предметам
+        </a>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {% if enrollments %}
+    <div class="table-responsive glass-card p-3">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Студент</th>
+                    <th>Email</th>
+                    <th>Группа</th>
+                    <th>Тип контроля</th>
+                    <th>Причина</th>
+                    <th>Семестр</th>
+                    <th>Оценка</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in enrollments %}
+                <tr id="row-{{ e.id }}">
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="avatar-circle me-2">
+                                {{ e.student_name|slice:":1" }}
+                            </div>
+                            {{ e.student_name }}
+                        </div>
+                    </td>
+                    <td><small>{{ e.student_email }}</small></td>
+                    <td>
+                        {% if e.group_name and e.group_name != '—' %}
+                            <span class="badge bg-success">{{ e.group_name }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge bg-secondary">{{ e.control_type_display }}</span></td>
+                    <td><span class="badge bg-info text-dark">{{ e.debt_type_display }}</span></td>
+                    <td><small class="text-muted">{{ e.semester_display }}</small></td>
+                    <td class="grade-cell">
+                        {% if e.grade %}
+                            <span class="badge bg-primary fs-6">{{ e.grade }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="status-cell">
+                        {% if e.status == 'passed' %}
+                            <span class="badge bg-success">{{ e.status_display }}</span>
+                        {% elif e.status == 'failed' %}
+                            <span class="badge bg-danger">{{ e.status_display }}</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">{{ e.status_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button type="button" 
+                                class="btn btn-sm btn-outline-primary rounded-pill edit-grade-btn"
+                                data-pk="{{ e.id }}"
+                                data-grade="{{ e.grade|default:'' }}"
+                                data-status="{{ e.status }}">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fa-solid fa-clipboard-check fa-3x text-muted mb-3"></i>
+        <p class="text-muted">По этой дисциплине нет задолженностей</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Модальное окно -->
+<div class="modal fade" id="gradeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-card">
+            <div class="modal-header bg-gradient-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fa-solid fa-pen-to-square me-2"></i>Выставить оценку
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-debt-id">
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Оценка / Зачёт</label>
+                    <input type="text" id="edit-grade" class="form-control rounded-pill" 
+                           placeholder="5, 4, Зачёт...">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Статус</label>
+                    <select id="edit-status" class="form-select">
+                        <option value="open">В процессе</option>
+                        <option value="passed">Зачтено / Сдано</option>
+                        <option value="failed">Задолженность</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary rounded-pill" onclick="saveGrade()">
+                    <i class="fa-solid fa-check me-1"></i>Сохранить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let gradeModal;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const modalElement = document.getElementById('gradeModal');
+    if (modalElement) {
+        gradeModal = new bootstrap.Modal(modalElement);
+    }
+    
+    document.querySelectorAll('.edit-grade-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.getElementById('edit-debt-id').value = this.getAttribute('data-pk');
+            document.getElementById('edit-grade').value = this.getAttribute('data-grade');
+            document.getElementById('edit-status').value = this.getAttribute('data-status');
+            gradeModal.show();
+        });
+    });
+});
+
+function getCSRFToken() {
+    const cookieValue = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1];
+    return cookieValue || '';
+}
+
+function saveGrade() {
+    const debtId = document.getElementById('edit-debt-id').value;
+    const grade = document.getElementById('edit-grade').value;
+    const status = document.getElementById('edit-status').value;
+    
+    const formData = new FormData();
+    formData.append('grade', grade);
+    formData.append('status', status);
+    
+    const saveBtn = document.querySelector('#gradeModal .btn-primary');
+    const originalHTML = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Сохранение...';
+    saveBtn.disabled = true;
+
+    fetch(`/subjects/grade/${debtId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            const row = document.getElementById(`row-${debtId}`);
+            if (row) {
+                const gradeCell = row.querySelector('.grade-cell');
+                const statusCell = row.querySelector('.status-cell');
+                
+                if (data.grade && data.grade !== '') {
+                    gradeCell.innerHTML = `<span class="badge bg-primary fs-6">${data.grade}</span>`;
+                } else {
+                    gradeCell.innerHTML = '<span class="text-muted">—</span>';
+                }
+                
+                let badgeClass = 'bg-warning text-dark';
+                let icon = '<i class="fa-solid fa-spinner me-1"></i>';
+                
+                if (status === 'passed') {
+                    badgeClass = 'bg-success';
+                    icon = '<i class="fa-solid fa-check-circle me-1"></i>';
+                } else if (status === 'failed') {
+                    badgeClass = 'bg-danger';
+                    icon = '<i class="fa-solid fa-exclamation-circle me-1"></i>';
+                }
+                
+                statusCell.innerHTML = `<span class="badge ${badgeClass}">${icon}${data.status_display}</span>`;
+                
+                const editBtn = row.querySelector('.edit-grade-btn');
+                if (editBtn) {
+                    editBtn.setAttribute('data-grade', data.grade || '');
+                    editBtn.setAttribute('data-status', status);
+                }
+            }
+            gradeModal.hide();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Ошибка при сохранении');
+    })
+    .finally(() => {
+        saveBtn.innerHTML = originalHTML;
+        saveBtn.disabled = false;
+    });
+}
+</script>
+{% endblock %}

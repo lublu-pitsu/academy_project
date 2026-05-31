@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fa-solid fa-layer-group me-2"></i>Список групп</h2>
+    </div>
+
+    {% if groups %}
+    <div class="row g-4">
+        {% for group in groups %}
+        <div class="col-md-4">
+            <div class="glass-card p-4 h-100">
+                <h5 class="mb-2">{{ group.name }}</h5>
+                <p class="text-muted small mb-1">
+                    <i class="fa-solid fa-building-columns me-1"></i>{{ group.faculty|default:"Факультет не указан" }}
+                </p>
+                <p class="text-muted small mb-1">
+                    <i class="fa-solid fa-graduation-cap me-1"></i>{{ group.course }} курс
+                </p>
+                {% if group.flow_name %}
+                <p class="text-muted small mb-2">
+                    <i class="fa-solid fa-arrow-right-arrow-left me-1"></i>Поток: {{ group.flow_name }}
+                </p>
+                {% endif %}
+                {% if group.external_id %}
+                <p class="text-muted small mb-2">
+                    <i class="fa-solid fa-id-card me-1"></i>Внешний ID: {{ group.external_id }}
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fa-solid fa-layer-group fa-3x text-muted mb-3"></i>
+        <p class="text-muted">Нет доступных групп</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

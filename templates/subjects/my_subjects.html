@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <h2 class="mb-4">
+        <i class="fa-solid fa-book-open-reader me-2"></i>Мои предметы
+    </h2>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {% if grouped_enrollments %}
+    <div class="row g-4">
+        {% for disc_id, group in grouped_enrollments.items %}
+        <div class="col-12">
+            <div class="glass-card p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h4 class="mb-1">{{ group.discipline_name }}</h4>
+                        <small class="text-muted">{{ group.discipline_code }}</small>
+                    </div>
+                    <span class="badge bg-primary fs-6">{{ group.debts|length }} задолженность(и)</span>
+                </div>
+                
+                <div class="mb-3">
+                    <i class="fa-solid fa-chalkboard-teacher me-1 text-muted"></i>
+                    <strong>{{ group.teacher_name }}</strong>
+                    <small class="text-muted">({{ group.teacher_department }})</small>
+                </div>
+                
+                <div class="mb-3">
+                    <i class="fa-solid fa-building-columns me-1 text-muted"></i>
+                    <small>{{ group.department }}</small>
+                </div>
+                
+                <hr>
+                
+                <div class="row g-3">
+                    {% for debt in group.debts %}
+                    <div class="col-md-6">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <span class="badge bg-secondary me-2">{{ debt.control_type_display }}</span>
+                                    <span class="badge bg-info text-dark">{{ debt.debt_type_display }}</span>
+                                </div>
+                                <div>
+                                    {% if debt.status == 'passed' %}
+                                        <span class="badge bg-success">
+                                            <i class="fa-solid fa-check-circle"></i> {{ debt.status_display }}
+                                        </span>
+                                    {% elif debt.status == 'failed' %}
+                                        <span class="badge bg-danger">
+                                            <i class="fa-solid fa-exclamation-circle"></i> {{ debt.status_display }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fa-solid fa-spinner"></i> {{ debt.status_display }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="fa-solid fa-calendar me-1"></i>
+                                    {{ debt.academic_year_display }}, {{ debt.semester_display }}
+                                </small>
+                                
+                                {% if debt.grade %}
+                                <div>
+                                    <small class="text-muted">Оценка:</small>
+                                    <strong class="text-primary ms-1">{{ debt.grade }}</strong>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-6 text-center glass-card p-5">
+            <i class="fa-solid fa-graduation-cap fa-5x text-muted opacity-50 mb-4"></i>
+            <h3>Нет задолженностей</h3>
+            <p class="text-muted">У вас нет активных задолженностей.</p>
+            <a href="{% url 'menu' %}" class="btn btn-outline-primary rounded-pill">В меню</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4 fade-in-up">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">
+            <i class="fa-solid fa-users me-2"></i>Список студентов
+            <span class="badge bg-primary ms-2" id="students-count">{{ students|length }}</span>
+        </h2>
+        <button class="btn btn-outline-primary rounded-pill" onclick="resetFilters()">
+            <i class="fa-solid fa-rotate me-1"></i>Сбросить фильтры
+        </button>
+    </div>
+    <div class="glass-card p-3 mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label fw-bold"><i class="fa-solid fa-search me-1"></i>Поиск</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+                    <input type="text" id="search-input" class="form-control border-start-0 ps-0" placeholder="ФИО, email, группа..." oninput="applyFilters()">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold"><i class="fa-solid fa-layer-group me-1"></i>Курс</label>
+                <select id="course-filter" class="form-select" onchange="applyFilters()">
+                    <option value="">Все курсы</option>
+                    {% for course in courses %}
+                    <option value="{{ course }}">{{ course }} курс</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold"><i class="fa-solid fa-users-rectangle me-1"></i>Группа</label>
+                <select id="group-filter" class="form-select" onchange="applyFilters()">
+                    <option value="">Все группы</option>
+                    {% for group in groups %}
+                    <option value="{{ group }}">{{ group }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1">
+                <div class="text-center">
+                    <div class="spinner-border text-primary d-none" id="loading-spinner" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Таблица -->
+    <div class="table-responsive glass-card p-3">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>ФИО</th>
+                    <th>Email</th>
+                    <th>Курс</th>
+                    <th>Группа</th>
+                </tr>
+            </thead>
+            <tbody id="students-tbody">
+                {% for student in students %}
+                <tr>
+                    <td>{{ student.last_name }} {{ student.first_name }} {{ student.middle_name }}</td>
+                    <td>{{ student.email }}</td>
+                    <td>
+                        {% if student.course and student.course != '-' %}
+                            <span class="badge bg-info">{{ student.course }} курс</span>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if student.group_name and student.group_name != '-' %}
+                            <span class="badge bg-success">{{ student.group_name }}</span>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr id="no-students-row">
+                    <td colspan="4" class="text-center py-5">
+                        <i class="fa-solid fa-user-slash fa-3x text-muted mb-3"></i>
+                        <p class="text-muted mb-0">Студенты не найдены</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilters() {
+    const search = document.getElementById('search-input').value.trim();
+    const course = document.getElementById('course-filter').value;
+    const group = document.getElementById('group-filter').value;
+
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (course) params.append('course', course);
+    if (group) params.append('group', group);
+
+    document.getElementById('loading-spinner').classList.remove('d-none');
+
+    fetch(`/accounts/students/filter/?${params.toString()}`)
+        .then(r => r.json())
+        .then(data => {
+            renderStudents(data.students);
+            document.getElementById('students-count').textContent = data.students.length;
+            document.getElementById('loading-spinner').classList.add('d-none');
+        });
+}
+
+function renderStudents(students) {
+    const tbody = document.getElementById('students-tbody');
+    if (students.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-5"><i class="fa-solid fa-user-slash fa-3x text-muted mb-3"></i><p class="text-muted">Студенты не найдены</p></td></tr>`;
+        return;
+    }
+    tbody.innerHTML = students.map(s => `
+        <tr>
+            <td>${s.full_name}</td>
+            <td>${s.email}</td>
+            <td>${s.course !== '-' ? `<span class="badge bg-info">${s.course} курс</span>` : '<span class="text-muted">-</span>'}</td>
+            <td>${s.group_number !== '-' ? `<span class="badge bg-success">${s.group_number}</span>` : '<span class="text-muted">-</span>'}</td>
+        </tr>
+    `).join('');
+}
+
+function resetFilters() {
+    document.getElementById('search-input').value = '';
+    document.getElementById('course-filter').value = '';
+    document.getElementById('group-filter').value = '';
+    applyFilters();
+}
+</script>
+{% endblock %}

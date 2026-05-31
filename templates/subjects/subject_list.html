@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fa-solid fa-book me-2"></i>Управление дисциплинами</h2>
+    </div>
+
+    {% if subjects %}
+    <div class="row g-4">
+        {% for subject in subjects %}
+        <div class="col-md-6">
+            <div class="glass-card p-4 h-100">
+                <h5>{{ subject.name }}</h5>
+                <p class="text-muted">{{ subject.description|truncatechars:100 }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fa-solid fa-book fa-3x text-muted mb-3"></i>
+        <p>Дисциплины пока не загружены.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

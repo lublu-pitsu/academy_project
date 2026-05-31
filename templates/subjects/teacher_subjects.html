@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <h2 class="mb-4"><i class="fa-solid fa-chalkboard-teacher me-2"></i>Мои дисциплины</h2>
+
+    {% if subjects %}
+    <div class="row g-4">
+        {% for subject in subjects %}
+        <div class="col-md-6">
+            <a href="{% url 'subject_students' subject.id %}" class="text-decoration-none">
+                <div class="glass-card p-4 h-100 subject-card-hover">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="avatar-circle-lg me-3">
+                            <i class="fa-solid fa-book-open"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-1">{{ subject.name }}</h5>
+                            <p class="text-muted mb-0 small">{{ subject.description|truncatechars:80|default:"Нет описания" }}</p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="text-end">
+                        <span class="text-primary"><i class="fa-solid fa-arrow-right"></i> Открыть ведомость</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-6 text-center glass-card p-5">
+            <i class="fa-solid fa-folder-open fa-5x text-muted opacity-50 mb-4"></i>
+            <h3>Нет назначенных дисциплин</h3>
+            <p class="text-muted">Обратитесь в деканат для назначения вам дисциплин.</p>
+            <a href="{% url 'menu' %}" class="btn btn-outline-primary rounded-pill">В меню</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
