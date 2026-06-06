@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="container py-4 fade-in-up">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid py-4 fade-in-up">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div>
-            <h2>{{ subject.name }}</h2>
+            <h2 class="mb-1">{{ subject.name }}</h2>
             <p class="text-muted mb-0">Ведомость задолженностей</p>
         </div>
         <a href="{% url 'teacher_subjects' %}" class="btn btn-outline-primary rounded-pill">
@@ -16,107 +16,150 @@
     {% endif %}
 
     {% if enrollments %}
-    <div class="table-responsive glass-card p-3">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Студент</th>
-                    <th>Email</th>
-                    <th>Группа</th>
-                    <th>Тип контроля</th>
-                    <th>Причина</th>
-                    <th>Семестр</th>
-                    <th>Оценка</th>
-                    <th>Статус</th>
-                    <th>Действия</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for e in enrollments %}
-                <tr id="row-{{ e.id }}">
-                    <td>
-                        <div class="d-flex align-items-center">
-                            <div class="avatar-circle me-2">
-                                {{ e.student_name|slice:":1" }}
+    <div class="d-none d-md-block">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 glass-card">
+                <thead class="table-light">
+                    <tr>
+                        <th>Студент</th>
+                        <th>Email</th>
+                        <th>Группа</th>
+                        <th>Тип контроля</th>
+                        <th>Причина</th>
+                        <th>Семестр</th>
+                        <th>Оценка</th>
+                        <th>Статус</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in enrollments %}
+                    <tr id="row-{{ e.id }}">
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-circle me-2">{{ e.student_name|slice:":1" }}</div>
+                                {{ e.student_name }}
                             </div>
-                            {{ e.student_name }}
-                        </div>
-                    </td>
-                    <td><small>{{ e.student_email }}</small></td>
-                    <td>
-                        {% if e.group_name and e.group_name != '—' %}
-                            <span class="badge bg-success">{{ e.group_name }}</span>
-                        {% else %}
-                            <span class="text-muted">—</span>
-                        {% endif %}
-                    </td>
-                    <td><span class="badge bg-secondary">{{ e.control_type_display }}</span></td>
-                    <td><span class="badge bg-info text-dark">{{ e.debt_type_display }}</span></td>
-                    <td><small class="text-muted">{{ e.semester_display }}</small></td>
-                    <td class="grade-cell">
-                        {% if e.grade %}
-                            <span class="badge bg-primary fs-6">{{ e.grade }}</span>
-                        {% else %}
-                            <span class="text-muted">—</span>
-                        {% endif %}
-                    </td>
-                    <td class="status-cell">
-                        {% if e.status == 'passed' %}
-                            <span class="badge bg-success">{{ e.status_display }}</span>
-                        {% elif e.status == 'failed' %}
-                            <span class="badge bg-danger">{{ e.status_display }}</span>
-                        {% else %}
-                            <span class="badge bg-warning text-dark">{{ e.status_display }}</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <button type="button" 
-                                class="btn btn-sm btn-outline-primary rounded-pill edit-grade-btn"
-                                data-pk="{{ e.id }}"
-                                data-grade="{{ e.grade|default:'' }}"
-                                data-status="{{ e.status }}">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        </td>
+                        <td><small>{{ e.student_email }}</small></td>
+                        <td>{% if e.group_name and e.group_name != '—' %}<span class="badge bg-success">{{ e.group_name }}</span>{% else %}—{% endif %}</td>
+                        <td><span class="badge bg-secondary">{{ e.control_type_display }}</span></td>
+                        <td><span class="badge bg-info text-dark">{{ e.debt_type_display }}</span></td>
+                        <td><small class="text-muted">{{ e.semester_display }}</small></td>
+                        <td class="grade-cell">{% include "subjects/grade_display.html" with grade=e.grade %}</td>
+                        <td class="status-cell">
+                            {% if e.grade or e.status == 'passed' %}
+                                <span class="badge bg-success"><i class="fa-solid fa-check-circle me-1"></i>Зачтено / Сдано</span>
+                            {% elif e.status == 'failed' %}
+                                <span class="badge bg-danger"><i class="fa-solid fa-exclamation-circle me-1"></i>Задолженность</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark"><i class="fa-solid fa-spinner me-1"></i>В процессе</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary rounded-pill edit-grade-btn"
+                                    data-pk="{{ e.id }}"
+                                    data-grade="{{ e.grade|default:'' }}"
+                                    data-status="{{ e.status }}"
+                                    data-control-type="{{ e.control_type }}">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Мобильная версия (карточки) -->
+    <div class="d-md-none">
+        {% for e in enrollments %}
+        <div class="glass-card p-3 mb-3" id="row-mob-{{ e.id }}">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="d-flex align-items-center">
+                    <div class="avatar-circle me-2">{{ e.student_name|slice:":1" }}</div>
+                    <div>
+                        <strong>{{ e.student_name }}</strong>
+                        <br><small>{{ e.student_email }}</small>
+                    </div>
+                </div>
+                <div class="status-cell">
+                    {% if e.grade or e.status == 'passed' %}
+                        <span class="badge bg-success"><i class="fa-solid fa-check-circle me-1"></i>Зачтено / Сдано</span>
+                    {% elif e.status == 'failed' %}
+                        <span class="badge bg-danger"><i class="fa-solid fa-exclamation-circle me-1"></i>Задолженность</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark"><i class="fa-solid fa-spinner me-1"></i>В процессе</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-6"><small class="text-muted">Группа:</small><br>{{ e.group_name }}</div>
+                <div class="col-6"><small class="text-muted">Тип:</small><br>{{ e.control_type_display }}</div>
+                <div class="col-6"><small class="text-muted">Причина:</small><br>{{ e.debt_type_display }}</div>
+                <div class="col-6"><small class="text-muted">Семестр:</small><br>{{ e.semester_display }}</div>
+                <div class="col-6 grade-cell"><small class="text-muted">Оценка:</small><br>{% include "subjects/grade_display.html" with grade=e.grade %}</div>
+            </div>
+            <button class="btn btn-sm btn-outline-primary rounded-pill w-100 edit-grade-btn"
+                    data-pk="{{ e.id }}"
+                    data-grade="{{ e.grade|default:'' }}"
+                    data-status="{{ e.status }}"
+                    data-control-type="{{ e.control_type }}">
+                <i class="fa-solid fa-pen me-1"></i>Выставить оценку
+            </button>
+        </div>
+        {% endfor %}
     </div>
     {% else %}
-    <div class="text-center py-5">
+    <div class="text-center py-5 glass-card">
         <i class="fa-solid fa-clipboard-check fa-3x text-muted mb-3"></i>
         <p class="text-muted">По этой дисциплине нет задолженностей</p>
     </div>
     {% endif %}
 </div>
 
-<!-- Модальное окно -->
 <div class="modal fade" id="gradeModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content glass-card">
             <div class="modal-header bg-gradient-primary text-white">
-                <h5 class="modal-title">
-                    <i class="fa-solid fa-pen-to-square me-2"></i>Выставить оценку
-                </h5>
+                <h5 class="modal-title"><i class="fa-solid fa-pen-to-square me-2"></i>Выставить оценку</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="edit-debt-id">
-                
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Оценка / Зачёт</label>
-                    <input type="text" id="edit-grade" class="form-control rounded-pill" 
-                           placeholder="5, 4, Зачёт...">
+                <input type="hidden" id="edit-control-type">
+
+                <div class="mb-3" id="grade-type-group" style="display: none;">
+                    <label class="form-label fw-bold">Тип оценки</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="grade-type" id="type-numeric" value="numeric">
+                        <label class="btn btn-outline-primary" for="type-numeric">Оценка (2-5)</label>
+                        <input type="radio" class="btn-check" name="grade-type" id="type-passfail" value="pass_fail">
+                        <label class="btn btn-outline-primary" for="type-passfail">Зачёт / Незачёт</label>
+                    </div>
                 </div>
-                
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Статус</label>
-                    <select id="edit-status" class="form-select">
-                        <option value="open">В процессе</option>
-                        <option value="passed">Зачтено / Сдано</option>
-                        <option value="failed">Задолженность</option>
+                <div class="mb-3" id="numeric-grade-group">
+                    <label class="form-label fw-bold">Оценка</label>
+                    <select id="edit-grade-numeric" class="form-select">
+                        <option value="5">5 (Отлично)</option>
+                        <option value="4">4 (Хорошо)</option>
+                        <option value="3">3 (Удовлетворительно)</option>
+                        <option value="2">2 (Неудовлетворительно)</option>
                     </select>
+                </div>
+
+                <div class="mb-3 d-none" id="passfail-grade-group">
+                    <label class="form-label fw-bold">Результат</label>
+                    <select id="edit-grade-passfail" class="form-select">
+                        <option value="passed">Зачёт</option>
+                        <option value="failed">Незачёт</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Комментарий</label>
+                    <textarea id="edit-comment" class="form-control" rows="2" placeholder="Необязательно"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -134,98 +177,174 @@
 <script>
 let gradeModal;
 
+const controlTypeRules = {
+    'exam': ['numeric'],
+    'credit': ['pass_fail'],
+    'differentiated_credit': ['numeric'],
+    'coursework': ['numeric'],
+    'practice': ['numeric'],
+    'lab_work': ['numeric'],
+    'other': ['numeric']
+};
+
+function applyControlTypeRules(controlType) {
+    const allowed = controlTypeRules[controlType] || ['numeric'];
+    const numericRadio = document.getElementById('type-numeric');
+    const passfailRadio = document.getElementById('type-passfail');
+    const groupDiv = document.getElementById('grade-type-group');
+
+    if (allowed.length === 1) {
+        groupDiv.style.display = 'none';
+        if (allowed[0] === 'numeric') {
+            numericRadio.checked = true;
+        } else {
+            passfailRadio.checked = true;
+        }
+    } else {
+        groupDiv.style.display = 'block';
+    }
+    updateGradeFields();
+}
+
+function updateGradeFields() {
+    const gradeType = document.querySelector('input[name="grade-type"]:checked')?.value || 'numeric';
+    document.getElementById('numeric-grade-group').classList.toggle('d-none', gradeType !== 'numeric');
+    document.getElementById('passfail-grade-group').classList.toggle('d-none', gradeType !== 'pass_fail');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const modalElement = document.getElementById('gradeModal');
-    if (modalElement) {
-        gradeModal = new bootstrap.Modal(modalElement);
-    }
-    
-    document.querySelectorAll('.edit-grade-btn').forEach(function(btn) {
+    if (modalElement) gradeModal = new bootstrap.Modal(modalElement);
+
+    document.querySelectorAll('input[name="grade-type"]').forEach(radio => {
+        radio.addEventListener('change', updateGradeFields);
+    });
+
+    document.querySelectorAll('.edit-grade-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            document.getElementById('edit-debt-id').value = this.getAttribute('data-pk');
-            document.getElementById('edit-grade').value = this.getAttribute('data-grade');
-            document.getElementById('edit-status').value = this.getAttribute('data-status');
+            const pk = this.dataset.pk;
+            let gradeRaw = this.dataset.grade;
+            const controlType = this.dataset.controlType;
+            const allowed = controlTypeRules[controlType] || ['numeric']; 
+            
+            document.getElementById('edit-debt-id').value = pk;
+            document.getElementById('edit-control-type').value = controlType;
+            document.getElementById('edit-comment').value = '';
+
+            applyControlTypeRules(controlType);
+
+            let gradeValue = '';
+            let gradeType = allowed[0]; 
+            if (gradeRaw) {
+                try {
+                    const parsed = JSON.parse(gradeRaw.replace(/'/g, '"'));
+                    gradeValue = String(parsed.value || '');
+                    gradeType = parsed.type || 'numeric';
+                } catch (e) {
+                    gradeValue = String(gradeRaw);
+                    gradeType = ['2','3','4','5'].includes(gradeValue) ? 'numeric' : 'pass_fail';
+                }
+            }
+
+            if (allowed.length === 1) {
+                gradeType = allowed[0];
+            }
+
+            if (gradeType === 'numeric') {
+                document.getElementById('type-numeric').checked = true;
+                document.getElementById('edit-grade-numeric').value = gradeValue || '5';
+            } else {
+                document.getElementById('type-passfail').checked = true;
+                document.getElementById('edit-grade-passfail').value = gradeValue || 'passed';
+            }
+            updateGradeFields();
             gradeModal.show();
         });
     });
 });
 
 function getCSRFToken() {
-    const cookieValue = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('csrftoken='))
-        ?.split('=')[1];
-    return cookieValue || '';
+    return document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
 }
 
 function saveGrade() {
     const debtId = document.getElementById('edit-debt-id').value;
-    const grade = document.getElementById('edit-grade').value;
-    const status = document.getElementById('edit-status').value;
-    
+    const gradeType = document.querySelector('input[name="grade-type"]:checked')?.value || 'numeric';
+    const grade = gradeType === 'numeric'
+        ? document.getElementById('edit-grade-numeric').value
+        : document.getElementById('edit-grade-passfail').value;
+    const comment = document.getElementById('edit-comment').value;
+
     const formData = new FormData();
     formData.append('grade', grade);
-    formData.append('status', status);
-    
+    formData.append('grade_type', gradeType);
+    formData.append('comment', comment);
+
     const saveBtn = document.querySelector('#gradeModal .btn-primary');
-    const originalHTML = saveBtn.innerHTML;
+    const origHTML = saveBtn.innerHTML;
     saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Сохранение...';
     saveBtn.disabled = true;
 
     fetch(`/subjects/grade/${debtId}/`, {
         method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest'
-        },
+        headers: { 'X-CSRFToken': getCSRFToken(), 'X-Requested-With': 'XMLHttpRequest' },
         body: formData
     })
-    .then(response => response.json())
+    .then(r => r.json())
     .then(data => {
         if (data.status === 'ok') {
             const row = document.getElementById(`row-${debtId}`);
             if (row) {
-                const gradeCell = row.querySelector('.grade-cell');
-                const statusCell = row.querySelector('.status-cell');
-                
-                if (data.grade && data.grade !== '') {
-                    gradeCell.innerHTML = `<span class="badge bg-primary fs-6">${data.grade}</span>`;
+                let gradeDisplay = '';
+                if (data.grade && typeof data.grade === 'object') {
+                    if (data.grade.type === 'numeric') {
+                        gradeDisplay = `<span class="badge bg-primary fs-6">${data.grade.value} (${data.grade.label || ''})</span>`;
+                    } else {
+                        const badgeClass = data.grade.value === 'passed' ? 'success' : 'danger';
+                        const label = data.grade.value === 'passed' ? 'Зачёт' : 'Незачёт';
+                        gradeDisplay = `<span class="badge bg-${badgeClass} fs-6">${label}</span>`;
+                    }
+                } else if (data.grade) {
+                    gradeDisplay = `<span class="badge bg-primary fs-6">${data.grade}</span>`;
                 } else {
-                    gradeCell.innerHTML = '<span class="text-muted">—</span>';
+                    gradeDisplay = '<span class="text-muted">—</span>';
                 }
-                
-                let badgeClass = 'bg-warning text-dark';
-                let icon = '<i class="fa-solid fa-spinner me-1"></i>';
-                
-                if (status === 'passed') {
-                    badgeClass = 'bg-success';
-                    icon = '<i class="fa-solid fa-check-circle me-1"></i>';
-                } else if (status === 'failed') {
-                    badgeClass = 'bg-danger';
-                    icon = '<i class="fa-solid fa-exclamation-circle me-1"></i>';
-                }
-                
-                statusCell.innerHTML = `<span class="badge ${badgeClass}">${icon}${data.status_display}</span>`;
-                
-                const editBtn = row.querySelector('.edit-grade-btn');
-                if (editBtn) {
-                    editBtn.setAttribute('data-grade', data.grade || '');
-                    editBtn.setAttribute('data-status', status);
+                row.querySelector('.grade-cell').innerHTML = gradeDisplay;
+                row.querySelector('.status-cell').innerHTML = '<span class="badge bg-success"><i class="fa-solid fa-check-circle me-1"></i>Зачтено / Сдано</span>';
+                const btn = row.querySelector('.edit-grade-btn');
+                if (btn) {
+                    btn.setAttribute('data-grade', JSON.stringify(data.grade));
+                    btn.setAttribute('data-status', 'passed');
                 }
             }
+
+            const mobRow = document.getElementById(`row-mob-${debtId}`);
+            if (mobRow) {
+                let gradeDisplay = '';
+                if (data.grade && typeof data.grade === 'object') {
+                    if (data.grade.type === 'numeric') {
+                        gradeDisplay = `<span class="badge bg-primary fs-6">${data.grade.value} (${data.grade.label || ''})</span>`;
+                    } else {
+                        const badgeClass = data.grade.value === 'passed' ? 'success' : 'danger';
+                        const label = data.grade.value === 'passed' ? 'Зачёт' : 'Незачёт';
+                        gradeDisplay = `<span class="badge bg-${badgeClass} fs-6">${label}</span>`;
+                    }
+                } else if (data.grade) {
+                    gradeDisplay = `<span class="badge bg-primary fs-6">${data.grade}</span>`;
+                } else {
+                    gradeDisplay = '<span class="text-muted">—</span>';
+                }
+                mobRow.querySelector('.grade-cell').innerHTML = '<small class="text-muted">Оценка:</small><br>' + gradeDisplay;
+                mobRow.querySelector('.status-cell').innerHTML = '<span class="badge bg-success"><i class="fa-solid fa-check-circle me-1"></i>Зачтено / Сдано</span>';
+            }
+
             gradeModal.hide();
         } else {
             alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
         }
     })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Ошибка при сохранении');
-    })
-    .finally(() => {
-        saveBtn.innerHTML = originalHTML;
-        saveBtn.disabled = false;
-    });
+    .catch(err => { console.error(err); alert('Ошибка при сохранении'); })
+    .finally(() => { saveBtn.innerHTML = origHTML; saveBtn.disabled = false; });
 }
 </script>
 {% endblock %}

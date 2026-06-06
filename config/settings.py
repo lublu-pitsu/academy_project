@@ -1,18 +1,21 @@
+from pathlib import Path
 import os
 from dotenv import load_dotenv
-from pathlib import Path
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-env_path = BASE_DIR / '.env'
-
-load_dotenv(dotenv_path=env_path)
-
-SECRET_KEY = os.getenv('DJANGO_KEY')
+SECRET_KEY = 'django-insecure-+gk5-fhituuvl)h2o^ajjp!_p1&erh*112tanc754p*@73s!^*'
 
 DEBUG = True
 
 ALLOWED_HOSTS = []
+
+SECRET_KEY = os.getenv('SECRET_KEY')
+
+EMULATOR_BASE_URL = os.getenv('EMULATOR_BASE_URL')
+EMULATOR_API_KEY = os.getenv('EMULATOR_API_KEY')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -24,6 +27,8 @@ INSTALLED_APPS = [
     'accounts',
     'dashboard',
     'subjects',
+    'retakes',
+    'schedule',
 ]
 
 MIDDLEWARE = [
@@ -92,8 +97,6 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'menu'
 LOGOUT_REDIRECT_URL = 'home'
 
-EMULATOR_BASE_URL = os.getenv('API_URL')
-EMULATOR_API_KEY = os.getenv('API_KEY')
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 86400  

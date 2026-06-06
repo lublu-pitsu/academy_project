@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <h2 class="mb-4"><i class="fa-solid fa-file-signature me-2"></i>Заявка на пересдачу</h2>
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    <div class="glass-card p-4">
+        <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Тип заявки</label>
+                    <select name="kind" class="form-select" id="kind-select">
+                        <option value="modify">Изменить существующую</option>
+                        <option value="create">Создать новую</option>
+                    </select>
+                </div>
+                <div class="col-md-6" id="retake-select-group">
+                    <label class="form-label">Пересдача</label>
+                    <select name="retake_id" class="form-select" id="retake-select">
+                        <option value="">Выберите пересдачу</option>
+                        {% for r in retakes %}
+                        <option value="{{ r.id }}">{{ r.discipline_name }} ({{ r.start_at|date:"d.m.Y H:i" }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6" id="discipline-group">
+                    <label class="form-label">Дисциплина</label>
+                    <select name="discipline_id" class="form-select" id="discipline-select" required>
+                        <option value="" disabled selected>Выберите дисциплину</option>
+                        {% for d in disciplines %}
+                        <option value="{{ d.id }}">{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if not disciplines %}
+                    <small class="text-danger">У вас нет дисциплин с задолженностями</small>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Преподаватель</label>
+                    <input type="text" class="form-control" value="{{ user.get_full_name|default:user.username }}" disabled>
+                    <input type="hidden" name="teacher_id" value="{{ teacher_id }}">
+                    <small class="text-muted">Вы подаёте заявку от своего имени</small>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Предлагаемая дата начала</label>
+                    <input type="datetime-local" name="proposed_start_at" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Предлагаемая дата окончания</label>
+                    <input type="datetime-local" name="proposed_end_at" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Корпус</label>
+                    <input type="text" name="proposed_building_number" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Аудитория</label>
+                    <input type="text" name="proposed_classroom_number" class="form-control">
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Варианты (диапазон/перечисление)</label>
+                    <textarea name="proposed_options" class="form-control" rows="2" placeholder='Например: "2025-06-10 T10:00", "2025-06-12 T14:00"'></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Комментарий</label>
+                    <textarea name="comment" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary rounded-pill" id="submit-btn" disabled>Отправить заявку</button>
+                <a href="{% url 'teacher_retakes' %}" class="btn btn-outline-secondary rounded-pill ms-2">Отмена</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const kindSelect = document.getElementById('kind-select');
+const retakeSelect = document.getElementById('retake-select');
+const disciplineGroup = document.getElementById('discipline-group');
+const disciplineSelect = document.getElementById('discipline-select');
+const submitBtn = document.getElementById('submit-btn');
+const retakeSelectGroup = document.getElementById('retake-select-group');
+
+function updateFormState() {
+    const kind = kindSelect.value;
+    if (kind === 'modify') {
+        retakeSelectGroup.style.display = 'block';
+        disciplineGroup.style.display = 'none';
+        disciplineSelect.removeAttribute('required');
+    } else {
+        retakeSelectGroup.style.display = 'none';
+        disciplineGroup.style.display = 'block';
+        disciplineSelect.setAttribute('required', 'required');
+    }
+    validateForm();
+}
+
+function validateForm() {
+    const kind = kindSelect.value;
+    let valid = true;
+    if (kind === 'modify') {
+        valid = retakeSelect.value !== '';
+    } else {
+        valid = disciplineSelect.value !== '';
+    }
+    const startDate = document.querySelector('input[name="proposed_start_at"]').value;
+    if (!startDate) valid = false;
+    submitBtn.disabled = !valid;
+}
+
+kindSelect.addEventListener('change', updateFormState);
+retakeSelect.addEventListener('change', validateForm);
+disciplineSelect.addEventListener('change', validateForm);
+document.querySelector('input[name="proposed_start_at"]').addEventListener('change', validateForm);
+
+updateFormState();
+</script>
+{% endblock %}

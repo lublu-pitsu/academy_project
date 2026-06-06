@@ -63,7 +63,7 @@ class Enrollment(models.Model):
     date_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('student', 'subject')    # Деканат
+        unique_together = ('student', 'subject')  
         verbose_name = 'Запись успеваемости'
         verbose_name_plural = 'Записи успеваемости'
 

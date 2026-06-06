@@ -1,0 +1,263 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block extra_head %}
+<style>
+    .schedule-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    .week-navigator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .week-navigator a {
+        background: rgba(255,255,255,0.8);
+        backdrop-filter: blur(10px);
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #2d3436;
+        text-decoration: none;
+        font-size: 1.2rem;
+        transition: 0.3s;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+    .week-navigator a:hover {
+        background: #667eea;
+        color: #fff;
+    }
+    .week-label {
+        font-size: 1.3rem;
+        font-weight: 700;
+        min-width: 180px;
+        text-align: center;
+    }
+    .datepicker-input {
+        background: rgba(255,255,255,0.8);
+        backdrop-filter: blur(10px);
+        border: none;
+        border-radius: 50px;
+        padding: 8px 15px;
+        font-weight: 600;
+        color: #2d3436;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        cursor: pointer;
+        max-width: 150px;
+    }
+    .datepicker-input:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px #667eea;
+    }
+    .weekdays-bar {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 25px;
+        overflow-x: auto;
+    }
+    .day-dot {
+        flex: 1;
+        min-width: 80px;
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 10px 5px;
+        text-align: center;
+        cursor: pointer;
+        transition: 0.3s;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        text-decoration: none;
+        color: #2d3436;
+        position: relative;
+    }
+    .day-dot:hover {
+        transform: translateY(-3px);
+        background: rgba(255,255,255,0.9);
+    }
+    .day-dot.today {
+        border: 2px solid #667eea;
+    }
+    .day-dot .weekday {
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+    .day-dot .date {
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    .day-dot .indicator {
+        width: 8px;
+        height: 8px;
+        background: #667eea;
+        border-radius: 50%;
+        margin: 6px auto 0;
+        display: none;
+    }
+    .day-dot.has-retakes .indicator {
+        display: block;
+    }
+    .day-block {
+        margin-bottom: 30px;
+    }
+    .day-header {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-bottom: 15px;
+        color: #2d3436;
+        border-bottom: 2px solid #667eea30;
+        padding-bottom: 5px;
+    }
+    .retake-card {
+        background: rgba(255,255,255,0.75);
+        backdrop-filter: blur(15px);
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: 0.3s;
+        border-left: 6px solid #667eea;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+    }
+    .retake-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 20px 30px rgba(0,0,0,0.1);
+    }
+    .retake-card.scheduled { border-left-color: #667eea; }
+    .retake-card.in_progress { border-left-color: #f39c12; }
+    .retake-card.completed { border-left-color: #27ae60; }
+    .retake-time {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #2d3436;
+    }
+    .retake-meta {
+        font-size: 0.9rem;
+        color: #636e72;
+        margin-top: 5px;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .status-scheduled { background: #667eea20; color: #667eea; }
+    .status-in_progress { background: #f39c1220; color: #e67e22; }
+    .status-completed { background: #27ae6020; color: #27ae60; }
+    .empty-day {
+        background: rgba(255,255,255,0.5);
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        color: #b2bec3;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <h2 class="text-center mb-3"><i class="fa-solid fa-calendar-week me-2"></i>Расписание пересдач</h2>
+
+    <div class="schedule-container">
+        <div class="week-navigator">
+            <a href="?date={{ prev_week|date:'Y-m-d' }}"><i class="fa-solid fa-chevron-left"></i></a>
+            <div class="week-label">{{ current_week_label }}</div>
+            <a href="?date={{ next_week|date:'Y-m-d' }}"><i class="fa-solid fa-chevron-right"></i></a>
+            <form method="get" class="d-inline-flex align-items-center ms-2">
+                <input type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}" onchange="this.form.submit()" class="datepicker-input">
+            </form>
+        </div>
+
+        <div class="weekdays-bar">
+            {% for day in days %}
+            <a href="#day-{{ day.date|date:'Y-m-d' }}" class="day-dot {% if day.is_today %}today{% endif %} {% if day.has_retakes %}has-retakes{% endif %}">
+                <div class="weekday">{{ day.weekday }}</div>
+                <div class="date">{{ day.date|date:"d" }}</div>
+                <div class="indicator"></div>
+            </a>
+            {% endfor %}
+        </div>
+
+        {% for day in days %}
+        <div class="day-block" id="day-{{ day.date|date:'Y-m-d' }}">
+            <div class="day-header">
+                {{ day.weekday }}, {{ day.date|date:"d.m.Y" }}
+            </div>
+            {% if day.retakes %}
+                {% for retake in day.retakes %}
+                <div class="retake-card {{ retake.status }}" onclick="showDetails('{{ retake.discipline_name }}', '{{ retake.start_at|date:'d.m.Y H:i' }}', '{{ retake.building_number }}-{{ retake.classroom_number }}', '{{ retake.type }}', '{{ retake.status }}', '{{ retake.teachers|join:', ' }}', '{{ retake.students|join:', ' }}')">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="retake-time">
+                                {{ retake.start_at|date:"H:i" }}
+                                {% if retake.end_time %} – {{ retake.end_time|date:"H:i" }}{% endif %}
+                            </div>
+                            <h5 class="mt-2 mb-1">{{ retake.discipline_name }}</h5>
+                            <div class="retake-meta">
+                                <i class="fa-solid fa-door-open me-1"></i> {{ retake.building_number }}-{{ retake.classroom_number }}
+                                <span class="mx-2">|</span>
+                                <i class="fa-solid fa-chalkboard-teacher me-1"></i> {{ retake.teachers|join:", "|truncatechars:60 }}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="status-badge status-{{ retake.status }}">
+                                {% if retake.status == 'scheduled' %}Назначена{% elif retake.status == 'in_progress' %}Идёт{% elif retake.status == 'completed' %}Завершена{% else %}{{ retake.status }}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-day">
+                    <i class="fa-solid fa-mug-hot fa-2x mb-2"></i>
+                    <p>Пересдачи отсутствуют</p>
+                </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-card">
+            <div class="modal-header bg-gradient-primary text-white">
+                <h5 class="modal-title" id="modalTitle"></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Дата и время:</strong> <span id="modalDateTime"></span></p>
+                <p><strong>Аудитория:</strong> <span id="modalRoom"></span></p>
+                <p><strong>Тип:</strong> <span id="modalType"></span></p>
+                <p><strong>Статус:</strong> <span id="modalStatus"></span></p>
+                <p><strong>Преподаватели:</strong> <span id="modalTeachers"></span></p>
+                <p><strong>Студенты:</strong> <span id="modalStudents"></span></p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showDetails(discipline, dateTime, room, type, status, teachers, students) {
+    document.getElementById('modalTitle').textContent = discipline;
+    document.getElementById('modalDateTime').textContent = dateTime;
+    document.getElementById('modalRoom').textContent = room;
+    document.getElementById('modalType').textContent = type === 'commission' ? 'С комиссией' : 'Обычная';
+    const statusMap = { scheduled: 'Назначена', in_progress: 'Проводится', completed: 'Завершена' };
+    document.getElementById('modalStatus').textContent = statusMap[status] || status;
+    document.getElementById('modalTeachers').textContent = teachers;
+    document.getElementById('modalStudents').textContent = students || '—';
+    var modal = new bootstrap.Modal(document.getElementById('detailsModal'));
+    modal.show();
+}
+</script>
+{% endblock %}

@@ -42,13 +42,11 @@ def student_list(request):
         print(f"Error loading data: {e}")
         students, groups, accounts = [], [], []
 
-    # Словарь: student_id -> email
     email_map = {}
     for acc in accounts:
         if acc.get('linked_entity_type') == 'student' and acc.get('linked_entity_id'):
             email_map[acc['linked_entity_id']] = acc.get('email', '-')
 
-    # Группы
     group_dict = {}
     for g in groups:
         group_dict[g['id']] = {
@@ -56,7 +54,6 @@ def student_list(request):
             'course': g.get('course', '-')
         }
 
-    # Обогащаем студентов
     for s in students:
         s['email'] = email_map.get(s.get('id'), '-')
         gid = s.get('group_id')

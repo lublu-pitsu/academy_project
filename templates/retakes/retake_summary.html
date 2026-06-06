@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid py-4 fade-in-up">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h2><i class="fa-solid fa-clock-rotate-left me-2"></i>Пересдачи</h2>
+        <div class="d-flex gap-2">
+            <a href="{% url 'create_retake' %}" class="btn btn-primary rounded-pill">
+                <i class="fa-solid fa-plus me-1"></i>Назначить
+            </a>
+            <a href="{% url 'sync_retakes' %}" class="btn btn-outline-secondary rounded-pill">
+                <i class="fa-solid fa-sync me-1"></i>Синхронизировать
+            </a>
+        </div>
+    </div>
+
+    {% if retakes %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 glass-card">
+            <thead class="table-light">
+                <tr>
+                    <th>Дисциплина</th>
+                    <th>Тип</th>
+                    <th>Дата</th>
+                    <th>Аудитория</th>
+                    <th>Статус</th>
+                    <th>Студенты</th>
+                    <th>Преподаватели</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in retakes %}
+                <tr>
+                    <td>{{ r.discipline_name }}</td>
+                    <td>
+                        {% if r.type == 'commission' %}
+                            <span class="badge bg-warning text-dark">С комиссией</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Обычная</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ r.start_at|date:"d.m.Y H:i" }}</td>
+                    <td>{{ r.building_number }}-{{ r.classroom_number }}</td>
+                    <td>
+                        {% if r.status == 'scheduled' %}
+                            <span class="badge bg-primary">Назначена</span>
+                        {% elif r.status == 'in_progress' %}
+                            <span class="badge bg-warning text-dark">Проводится</span>
+                        {% elif r.status == 'completed' %}
+                            <span class="badge bg-success">Завершена</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ r.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span title="{{ r.students|join:', ' }}">
+                            {{ r.students|length }} чел.
+                        </span>
+                    </td>
+                    <td>{{ r.teachers|join:", " }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 glass-card">
+        <i class="fa-solid fa-calendar-xmark fa-3x text-muted mb-3"></i>
+        <h4>Нет пересдач</h4>
+        <p class="text-muted">Нажмите «Синхронизировать», чтобы загрузить данные из API, или создайте новую пересдачу.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

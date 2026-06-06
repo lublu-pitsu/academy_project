@@ -1,0 +1,17 @@
+{% if grade %}
+    {% if grade.type == 'numeric' %}
+        <span class="badge bg-primary fs-6">{{ grade.value }} ({{ grade.label|default:"баллов" }})</span>
+    {% elif grade.type == 'pass_fail' %}
+        {% if grade.value == 'passed' %}
+            <span class="badge bg-success fs-6">Зачёт</span>
+        {% elif grade.value == 'failed' %}
+            <span class="badge bg-danger fs-6">Незачёт</span>
+        {% else %}
+            <span class="badge bg-secondary fs-6">{{ grade.value }}</span>
+        {% endif %}
+    {% else %}
+        <span class="badge bg-primary fs-6">{{ grade }}</span>
+    {% endif %}
+{% else %}
+    <span class="text-muted">—</span>
+{% endif %}

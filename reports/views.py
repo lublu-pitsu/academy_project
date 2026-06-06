@@ -4,10 +4,11 @@ from django.http import HttpResponse
 from api_client import EmulatorAPI
 from accounts.models import Profile
 from collections import OrderedDict
-import csv
-import io
 from datetime import datetime
-from urllib.parse import urlencode
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+from io import BytesIO
 
 def is_dean(user):
     try:
@@ -15,9 +16,7 @@ def is_dean(user):
     except Profile.DoesNotExist:
         return False
 
-
 def get_all_data(api):
-    """Получает все данные из API"""
     all_debts = api.get_debts()
     disciplines = api.get_disciplines()
     teachers = api.get_teachers()
@@ -25,9 +24,7 @@ def get_all_data(api):
     accounts = api.get_accounts()
     return all_debts, disciplines, teachers, groups, accounts
 
-
 def enrich_debts(all_debts, disciplines, teachers, groups, accounts):
-    """Обогащает долги данными"""
     disc_map = {d['id']: d for d in disciplines}
     
     teacher_map = {}
@@ -75,6 +72,7 @@ def enrich_debts(all_debts, disciplines, teachers, groups, accounts):
         'in_progress': 'В процессе',
         'passed': 'Сдано',
         'failed': 'Задолженность',
+        'closed': 'Сдано',
     }
 
     for debt in all_debts:
@@ -101,9 +99,7 @@ def enrich_debts(all_debts, disciplines, teachers, groups, accounts):
 
     return all_debts
 
-
 def apply_filters(debts, search='', group='', status='', control=''):
-    """Фильтрует долги"""
     filtered = []
     for d in debts:
         if search:
@@ -117,8 +113,13 @@ def apply_filters(debts, search='', group='', status='', control=''):
         if group and d.get('group_name', '') != group:
             continue
         
-        if status and d.get('status', '') != status:
-            continue
+        if status:
+            if status == 'passed':
+                if d.get('status') not in ('passed', 'closed'):
+                    continue
+            else:
+                if d.get('status') != status:
+                    continue
         
         if control and d.get('control_type', '') != control:
             continue
@@ -127,9 +128,7 @@ def apply_filters(debts, search='', group='', status='', control=''):
     
     return filtered
 
-
 def group_by_discipline(debts):
-    """Группирует долги по дисциплинам"""
     grouped = OrderedDict()
     for d in debts:
         disc_id = d.get('discipline_id')
@@ -144,6 +143,7 @@ def group_by_discipline(debts):
                 'open_count': 0,
                 'passed_count': 0,
                 'failed_count': 0,
+                'other_count': 0,
             }
         
         grouped[disc_id]['debts'].append(d)
@@ -152,13 +152,14 @@ def group_by_discipline(debts):
         st = d.get('status', '')
         if st in ['open', 'in_progress']:
             grouped[disc_id]['open_count'] += 1
-        elif st == 'passed':
+        elif st in ('passed', 'closed'):
             grouped[disc_id]['passed_count'] += 1
         elif st == 'failed':
             grouped[disc_id]['failed_count'] += 1
+        else:
+            grouped[disc_id]['other_count'] += 1
     
     return grouped
-
 
 @login_required
 @user_passes_test(is_dean)
@@ -185,12 +186,21 @@ def debts_summary(request):
             'error': str(e)
         })
 
-    # Собираем все возможные значения для фильтров
     all_enriched = enrich_debts(all_debts, disciplines, teachers, groups, accounts)
     all_groups = sorted({d.get('group_name') for d in all_enriched if d.get('group_name') != '—'})
-    all_controls = sorted({d.get('control_type') for d in all_enriched if d.get('control_type')})
+    
+    CONTROL_TYPES_FILTER = {
+        'exam': 'Экзамен',
+        'credit': 'Зачёт',
+        'differentiated_credit': 'Диф. зачёт',
+        'coursework': 'Курсовая',
+        'practice': 'Практика',
+        'lab_work': 'Лаб. работа',
+        'other': 'Другое',
+    }
+    raw_controls = sorted({d.get('control_type') for d in all_enriched if d.get('control_type')})
+    all_controls = [(c, CONTROL_TYPES_FILTER.get(c, c)) for c in raw_controls]
 
-    # Сохраняем параметры в сессию для экспорта
     request.session['report_filters'] = {
         'search': search,
         'group': group,
@@ -211,192 +221,253 @@ def debts_summary(request):
         }
     })
 
-
 @login_required
 @user_passes_test(is_dean)
 def export_debts_excel(request):
     api = EmulatorAPI()
-    filters = request.session.get('report_filters', {})
+    
+    filters = {
+        'search': request.GET.get('search', '').strip(),
+        'group': request.GET.get('group', '').strip(),
+        'status': request.GET.get('status', '').strip(),
+        'control': request.GET.get('control', '').strip(),
+    }
     
     all_debts, disciplines, teachers, groups, accounts = get_all_data(api)
     enriched = enrich_debts(all_debts, disciplines, teachers, groups, accounts)
     filtered = apply_filters(
         enriched,
-        filters.get('search', ''),
-        filters.get('group', ''),
-        filters.get('status', ''),
-        filters.get('control', '')
+        filters['search'],
+        filters['group'],
+        filters['status'],
+        filters['control']
     )
-    
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter=';')
-    writer.writerow([
-        'Дисциплина', 'Студент', 'Email', 'Группа', 'Преподаватель',
-        'Тип контроля', 'Причина', 'Семестр', 'Статус', 'Оценка'
-    ])
-    
-    for d in filtered:
-        writer.writerow([
-            d.get('discipline_name', '—'),
-            d.get('student_name', '—'),
-            d.get('student_email', '—'),
-            d.get('group_name', '—'),
-            d.get('teacher_name', '—'),
-            d.get('control_type_display', '—'),
-            d.get('debt_type_display', '—'),
-            d.get('semester_display', '—'),
-            d.get('status_display', '—'),
-            d.get('grade', '—'),
-        ])
-    
-    response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8-sig')
-    response['Content-Disposition'] = f'attachment; filename="debts_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
-    return response
 
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Задолженности"
+
+    headers = ['Дисциплина', 'Студент', 'Email', 'Группа', 'Преподаватель', 'Тип контроля', 'Причина', 'Семестр', 'Статус', 'Оценка']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="667eea", end_color="667eea", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center")
+
+    for row_idx, d in enumerate(filtered, 2):
+        ws.cell(row=row_idx, column=1, value=d.get('discipline_name', '—'))
+        ws.cell(row=row_idx, column=2, value=d.get('student_name', '—'))
+        ws.cell(row=row_idx, column=3, value=d.get('student_email', '—'))
+        ws.cell(row=row_idx, column=4, value=d.get('group_name', '—'))
+        ws.cell(row=row_idx, column=5, value=d.get('teacher_name', '—'))
+        ws.cell(row=row_idx, column=6, value=d.get('control_type_display', '—'))
+        ws.cell(row=row_idx, column=7, value=d.get('debt_type_display', '—'))
+        ws.cell(row=row_idx, column=8, value=d.get('semester_display', '—'))
+        ws.cell(row=row_idx, column=9, value=d.get('status_display', '—'))
+        
+        grade = d.get('grade')
+        if isinstance(grade, dict):
+            if grade.get('type') == 'numeric':
+                grade_str = f"{grade.get('value', '')} ({grade.get('label', '')})"
+            elif grade.get('type') == 'pass_fail':
+                grade_str = 'Зачёт' if grade.get('value') == 'passed' else 'Незачёт' if grade.get('value') == 'failed' else str(grade.get('value', ''))
+            else:
+                grade_str = str(grade)
+        else:
+            grade_str = str(grade) if grade else '—'
+        ws.cell(row=row_idx, column=10, value=grade_str)
+
+    for col in range(1, 11):
+        ws.column_dimensions[get_column_letter(col)].width = 20
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="debts_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
+    return response
 
 @login_required
 @user_passes_test(is_dean)
 def export_debts_word(request):
     api = EmulatorAPI()
-    filters = request.session.get('report_filters', {})
+    
+    filters = {
+        'search': request.GET.get('search', '').strip(),
+        'group': request.GET.get('group', '').strip(),
+        'status': request.GET.get('status', '').strip(),
+        'control': request.GET.get('control', '').strip(),
+    }
     
     all_debts, disciplines, teachers, groups, accounts = get_all_data(api)
     enriched = enrich_debts(all_debts, disciplines, teachers, groups, accounts)
     filtered = apply_filters(
         enriched,
-        filters.get('search', ''),
-        filters.get('group', ''),
-        filters.get('status', ''),
-        filters.get('control', '')
+        filters['search'],
+        filters['group'],
+        filters['status'],
+        filters['control']
     )
-    
+
     total = len(filtered)
     open_count = sum(1 for d in filtered if d.get('status') in ['open', 'in_progress'])
-    passed_count = sum(1 for d in filtered if d.get('status') == 'passed')
+    passed_count = sum(1 for d in filtered if d.get('status') in ['passed', 'closed'])
     failed_count = sum(1 for d in filtered if d.get('status') == 'failed')
-    
-    # Группируем по студентам
-    students = OrderedDict()
-    for d in filtered:
-        name = d.get('student_name', '—')
-        if name not in students:
-            students[name] = {
-                'group': d.get('group_name', '—'),
-                'debts': [],
-                'open': 0,
-                'passed': 0,
-                'failed': 0,
-            }
-        students[name]['debts'].append(d)
-        st = d.get('status', '')
-        if st in ['open', 'in_progress']:
-            students[name]['open'] += 1
-        elif st == 'passed':
-            students[name]['passed'] += 1
-        elif st == 'failed':
-            students[name]['failed'] += 1
-    
-    # Группируем по дисциплинам
+    other_count = total - open_count - passed_count - failed_count
+
     grouped = group_by_discipline(filtered)
-    
-    filters_text = ''
-    if filters.get('group'):
-        filters_text += f' по группе {filters["group"]}'
-    if filters.get('status'):
-        status_names = {'open': 'открытые', 'passed': 'сданные', 'failed': 'просроченные'}
-        filters_text += f' ({status_names.get(filters["status"], filters["status"])})'
-    
+
+    # Улучшенные стили для Word – таблица вписывается в страницу
     html = f'''
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
           xmlns:w="urn:schemas-microsoft-com:office:word"
           xmlns="http://www.w3.org/TR/REC-html40">
     <head>
         <meta charset="utf-8">
-        <title>Отчёт по задолженностям</title>
+        <title>Краткий отчёт по задолженностям</title>
         <style>
-            body {{ font-family: 'Times New Roman', serif; font-size: 14pt; line-height: 1.5; padding: 40px; }}
-            h1 {{ text-align: center; font-size: 18pt; margin-bottom: 30px; }}
-            h2 {{ font-size: 16pt; margin-top: 25px; }}
-            h3 {{ font-size: 14pt; margin-top: 20px; }}
-            p {{ margin: 10px 0; text-indent: 30px; }}
+            body {{
+                font-family: 'Times New Roman', serif;
+                font-size: 12pt;
+                line-height: 1.3;
+                margin: 2cm auto;
+                width: 90%;
+                max-width: 1000px;
+            }}
+            h1 {{ text-align: center; font-size: 18pt; margin-bottom: 20px; }}
+            h2 {{ font-size: 16pt; margin-top: 20px; margin-bottom: 10px; }}
+            p {{ margin: 10px 0; }}
             .bad {{ color: #c0392b; font-weight: bold; }}
             .good {{ color: #27ae60; font-weight: bold; }}
             .warn {{ color: #f39c12; font-weight: bold; }}
             .date {{ text-align: right; color: #7f8c8d; margin-bottom: 30px; }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+                font-size: 10pt;
+                margin: 15px 0;
+            }}
+            th, td {{
+                border: 1px solid #aaa;
+                padding: 5px 4px;
+                vertical-align: top;
+                word-wrap: break-word;
+            }}
+            th {{
+                background-color: #667eea;
+                color: white;
+                font-weight: bold;
+            }}
+            /* Ширина колонок в процентах */
+            .summary-table th:nth-child(1) {{ width: 30%; }}
+            .summary-table th:nth-child(2) {{ width: 20%; }}
+            .summary-table th:nth-child(3) {{ width: 10%; }}
+            .summary-table th:nth-child(4) {{ width: 10%; }}
+            .summary-table th:nth-child(5) {{ width: 10%; }}
+            .summary-table th:nth-child(6) {{ width: 10%; }}
+            .summary-table th:nth-child(7) {{ width: 10%; }}
+            
+            .debt-table th:nth-child(1) {{ width: 25%; }}
+            .debt-table th:nth-child(2) {{ width: 25%; }}
+            .debt-table th:nth-child(3) {{ width: 15%; }}
+            .debt-table th:nth-child(4) {{ width: 15%; }}
+            .debt-table th:nth-child(5) {{ width: 10%; }}
+            .debt-table th:nth-child(6) {{ width: 10%; }}
+            
+            @media print {{
+                body {{ margin: 0; }}
+                table {{ page-break-inside: avoid; }}
+            }}
         </style>
     </head>
     <body>
-        <h1>Аналитический отчёт по академическим задолженностям</h1>
+        <h1>Краткий отчёт по академическим задолженностям</h1>
         <p class="date">Дата: {datetime.now().strftime("%d.%m.%Y %H:%M")}</p>
         
         <h2>1. Общая сводка</h2>
-        <p>Всего задолженностей{filters_text}: <span class="bad">{total}</span>.</p>
-        <p>Из них:</p>
-        <p>- Открытых (в процессе): <span class="warn">{open_count}</span>.</p>
-        <p>- Успешно закрытых: <span class="good">{passed_count}</span>.</p>
-        <p>- Просроченных: <span class="bad">{failed_count}</span>.</p>
+        <p>Всего задолженностей: <span class="bad">{total}</span>.</p>
+        <p>В процессе: <span class="warn">{open_count}</span> | Сдано: <span class="good">{passed_count}</span> | Просрочено: <span class="bad">{failed_count}</span> | Прочее: {other_count}</p>
         
-        <h2>2. Студенты с задолженностями</h2>
-        <p>Всего студентов: {len(students)}.</p>
+        <h2>2. Сводка по дисциплинам</h2>
+        <table class="summary-table">
+            <thead>
+                <tr><th>Дисциплина</th><th>Преподаватель</th><th>Всего</th><th>Открыто</th><th>Сдано</th><th>Просрочено</th><th>Прочее</th></tr>
+            </thead>
+            <tbody>
     '''
-    
-    if students:
-        html += '<p>Список студентов:</p>'
-        for name, info in students.items():
-            debts_desc = []
-            for d in info['debts']:
-                debts_desc.append(f"{d.get('discipline_name', '')} ({d.get('control_type_display', '').lower()})")
-            debts_text = '; '.join(debts_desc)
-            status_text = f"открыто: {info['open']}, сдано: {info['passed']}, просрочено: {info['failed']}"
-            html += f'<p>- {name}, группа {info["group"]}. Задолженности: {debts_text}. Статистика: {status_text}.</p>'
-    
-    html += '''
-        <h2>3. Анализ по дисциплинам</h2>
-    '''
-    
     for disc_id, data in grouped.items():
         html += f'''
-            <h3>{data['discipline_name']}</h3>
-            <p>Преподаватель: {data['teacher_name']}. Кафедра: {data['department']}.</p>
-            <p>Всего задолженностей: {data['total_count']} (открыто: {data['open_count']}, сдано: {data['passed_count']}, просрочено: {data['failed_count']}).</p>
+        <tr>
+            <td>{data['discipline_name']}</td>
+            <td>{data['teacher_name']}</td>
+            <td style="text-align:center">{data['total_count']}</td>
+            <td style="text-align:center">{data['open_count']}</td>
+            <td style="text-align:center">{data['passed_count']}</td>
+            <td style="text-align:center">{data['failed_count']}</td>
+            <td style="text-align:center">{data['other_count']}</td>
+        </tr>
         '''
-        
-        disc_students = {}
-        for d in data['debts']:
-            name = d.get('student_name', '—')
-            if name not in disc_students:
-                disc_students[name] = []
-            disc_students[name].append(d)
-        
-        if disc_students:
-            html += '<p>Студенты:</p>'
-            for name, debts in disc_students.items():
-                reasons = ', '.join([f"{d.get('control_type_display', '')} - {d.get('debt_type_display', '')}" for d in debts])
-                html += f'<p>- {name}: {reasons}.</p>'
-    
     html += '''
-        <h2>4. Рекомендации</h2>
+            </tbody>
+        </table>
     '''
     
-    if failed_count > 0:
-        html += f'<p>Выявлено <span class="bad">{failed_count}</span> просроченных задолженностей. Рекомендуется назначить пересдачи.</p>'
-    
-    if total > 0:
-        if passed_count / total > 0.5:
-            html += f'<p class="good">Более половины задолженностей успешно закрыты. Положительная динамика.</p>'
-        if open_count / total > 0.5:
-            html += f'<p class="warn">Более половины задолженностей остаются открытыми. Требуется усиление контроля.</p>'
-    
-    if total == 0:
-        html += '<p>Задолженностей по заданным критериям не найдено.</p>'
+    if grouped:
+        html += '<h2>3. Детализация задолженностей (первые 50 записей)</h2>'
+        html += '''
+        <table class="debt-table">
+            <thead>
+                <tr><th>Студент</th><th>Группа</th><th>Дисциплина</th><th>Тип контроля</th><th>Статус</th><th>Оценка</th></tr>
+            </thead>
+            <tbody>
+        '''
+        shown = 0
+        for disc_id, data in grouped.items():
+            for d in data['debts']:
+                if shown >= 50:
+                    break
+                grade_val = ''
+                if d.get('grade'):
+                    if isinstance(d['grade'], dict):
+                        if d['grade'].get('type') == 'numeric':
+                            grade_val = f"{d['grade'].get('value', '')}"
+                        elif d['grade'].get('type') == 'pass_fail':
+                            grade_val = 'Зачёт' if d['grade'].get('value') == 'passed' else 'Незачёт'
+                    else:
+                        grade_val = str(d['grade'])
+                else:
+                    grade_val = '—'
+                status_val = d.get('status_display', '—')
+                html += f'''
+                <tr>
+                    <td>{d.get('student_name', '—')}</td>
+                    <td>{d.get('group_name', '—')}</td>
+                    <td>{d.get('discipline_name', '—')}</td>
+                    <td>{d.get('control_type_display', '—')}</td>
+                    <td>{status_val}</td>
+                    <td>{grade_val}</td>
+                </tr>
+                '''
+                shown += 1
+            if shown >= 50:
+                break
+        html += '''
+            </tbody>
+        </table>
+        <p><em>Примечание: показаны первые 50 записей. Полный список доступен в Excel-отчёте.</em></p>
+        '''
     
     html += '''
-        <br><br>
-        <p>Отчёт подготовлен системой «АкадемКонтроль».</p>
+        <br>
+        <p>Отчёт подготовлен автоматически.</p>
     </body>
     </html>
     '''
-    
     response = HttpResponse(html, content_type='application/msword; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.doc"'
     return response

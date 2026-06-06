@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <h2 class="mb-4"><i class="fa-solid fa-envelope-open-text me-2"></i>Заявки на пересдачи</h2>
+
+    {% if requests %}
+    <div class="list-group">
+        {% for req in requests %}
+        <div class="list-group-item glass-card mb-3 p-4">
+            <div class="row">
+                <div class="col-12 col-md-8">
+                    <div class="mb-2">
+                        {% if req.kind == 'create' %}
+                            <span class="badge bg-primary">Создание новой пересдачи</span>
+                        {% elif req.kind == 'modify' %}
+                            <span class="badge bg-warning text-dark">Изменение пересдачи</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ req.kind }}</span>
+                        {% endif %}
+                    </div>
+                    <h5 class="mb-2">{{ req.discipline_name|default:"Дисциплина не указана" }}</h5>
+                    <p class="mb-1"><strong>Преподаватель:</strong> {{ req.teacher_name|default:"Не указан" }}</p>
+                    {% if req.kind == 'modify' and req.current_start_at %}
+                    <p class="mb-1"><strong>Текущая дата:</strong> {{ req.current_start_at|slice:":16"|default:"—" }}</p>
+                    {% endif %}
+                    <p class="mb-1"><strong>Предлагаемая дата начала:</strong> {{ req.proposed_start_at|slice:":16"|default:"—" }}</p>
+                    {% if req.proposed_end_at %}
+                    <p class="mb-1"><strong>Предлагаемая дата окончания:</strong> {{ req.proposed_end_at|slice:":16"|default:"—" }}</p>
+                    {% endif %}
+                    <p class="mb-1"><strong>Предлагаемая аудитория:</strong> {{ req.proposed_building_number|default:"—" }}-{{ req.proposed_classroom_number|default:"—" }}</p>
+                    {% if req.comment %}
+                    <p class="mb-1"><strong>Комментарий преподавателя:</strong> {{ req.comment }}</p>
+                    {% endif %}
+                </div>
+                <div class="col-12 col-md-4 d-flex flex-column justify-content-center gap-2 mt-3 mt-md-0">
+                    <button class="btn btn-success rounded-pill review-btn"
+                            data-id="{{ req.id }}"
+                            data-decision="approved"
+                            data-retake-id="{{ req.retake_id }}"
+                            data-start="{{ req.proposed_start_at }}"
+                            data-end="{{ req.proposed_end_at }}"
+                            data-building="{{ req.proposed_building_number }}"
+                            data-classroom="{{ req.proposed_classroom_number }}">
+                        <i class="fa-solid fa-check me-1"></i>Одобрить
+                    </button>
+                    <button class="btn btn-danger rounded-pill review-btn"
+                            data-id="{{ req.id }}"
+                            data-decision="rejected"
+                            data-retake-id="{{ req.retake_id }}">
+                        <i class="fa-solid fa-times me-1"></i>Отклонить
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5 glass-card">
+        <i class="fa-solid fa-inbox fa-3x text-muted mb-3"></i>
+        <h4>Нет активных заявок</h4>
+        <p class="text-muted">Преподаватели пока не отправляли заявки на изменение пересдач.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div id="rejectModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 20px; padding: 30px; width: 90%; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+        <h5 class="mb-3">Отклонить заявку</h5>
+        <input type="hidden" id="review-request-id">
+        <input type="hidden" id="review-retake-id">
+        <div class="mb-3">
+            <label class="form-label fw-bold">Причина отклонения</label>
+            <textarea id="review-comment" class="form-control" rows="3" placeholder="Укажите причину отказа..."></textarea>
+        </div>
+        <div class="d-flex justify-content-end gap-2 flex-wrap">
+            <button class="btn btn-secondary rounded-pill" onclick="closeRejectModal()">Отмена</button>
+            <button class="btn btn-danger rounded-pill" id="confirm-reject-btn">
+                <i class="fa-solid fa-times me-1"></i>Отклонить
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openRejectModal() {
+    document.getElementById('rejectModalOverlay').style.display = 'block';
+}
+
+function closeRejectModal() {
+    document.getElementById('rejectModalOverlay').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.review-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const id = this.dataset.id;
+            const decision = this.dataset.decision;
+            const retakeId = this.dataset.retakeId;
+            
+            if (decision === 'approved') {
+                const start = this.dataset.start || '';
+                const end = this.dataset.end || '';
+                const building = this.dataset.building || '';
+                const classroom = this.dataset.classroom || '';
+                submitReview(id, decision, '', retakeId, start, end, building, classroom);
+            } else {
+                document.getElementById('review-request-id').value = id;
+                document.getElementById('review-retake-id').value = retakeId;
+                document.getElementById('review-comment').value = '';
+                openRejectModal();
+            }
+        });
+    });
+    
+    document.getElementById('confirm-reject-btn').addEventListener('click', function() {
+        const id = document.getElementById('review-request-id').value;
+        const retakeId = document.getElementById('review-retake-id').value;
+        const comment = document.getElementById('review-comment').value.trim();
+        
+        if (!comment) {
+            alert('Укажите причину отклонения');
+            return;
+        }
+        
+        submitReview(id, 'rejected', comment, retakeId);
+        closeRejectModal();
+    });
+});
+
+function submitReview(id, decision, comment, retakeId, start = '', end = '', building = '', classroom = '') {
+    const csrftoken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+    const formData = new FormData();
+    formData.append('decision', decision);
+    formData.append('review_comment', comment);
+    formData.append('retake_id', retakeId);
+    if (decision === 'approved') {
+        formData.append('start_at', start);
+        formData.append('end_at', end);
+        formData.append('building_number', building);
+        formData.append('classroom_number', classroom);
+    }
+
+    fetch(`/retakes/requests/${id}/review/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrftoken },
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            location.reload();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        alert('Ошибка при отправке запроса');
+    });
+}
+</script>
+{% endblock %}

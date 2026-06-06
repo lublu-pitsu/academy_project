@@ -1,10 +1,12 @@
+import json
+from collections import OrderedDict
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.http import JsonResponse
 from api_client import EmulatorAPI
 from accounts.models import Profile
-from collections import OrderedDict
+from django.http import JsonResponse
 
 def is_dean(user):
     return hasattr(user, 'profile') and user.profile.role == 'dean'
@@ -134,6 +136,7 @@ def subject_students(request, subject_pk):
         'in_progress': 'В процессе',
         'passed': 'Зачтено / Сдано',
         'failed': 'Задолженность',
+        'closed': 'Зачтено / Сдано',
     }
 
     subject_name = disc_map.get(discipline_id, 'Дисциплина')
@@ -164,30 +167,26 @@ def update_grade(request, enrollment_pk):
 
     debt_id = str(enrollment_pk)
     access_token = request.session.get('access_token')
+    refresh_token = request.session.get('refresh_token')
     if not access_token:
         return JsonResponse({'status': 'error', 'error': 'Нет доступа'}, status=403)
 
     grade = request.POST.get('grade', '')
+    grade_type = request.POST.get('grade_type', 'numeric')
     comment = request.POST.get('comment', '')
-    
+
     api = EmulatorAPI()
     try:
-        resp = api.grade_debt(debt_id, grade, comment, access_token)
-        
-        status_display = resp.get('status_display', '')
-        if not status_display:
-            status_map = {
-                'open': 'В процессе',
-                'in_progress': 'В процессе', 
-                'passed': 'Зачтено / Сдано',
-                'failed': 'Задолженность',
-            }
-            status_display = status_map.get(resp.get('status', ''), '')
-        
+        resp, new_access, new_refresh = api.grade_debt(debt_id, grade, grade_type, comment, access_token, refresh_token)
+
+        if new_access and new_access != access_token:
+            request.session['access_token'] = new_access
+            request.session['refresh_token'] = new_refresh
+
         return JsonResponse({
             'status': 'ok',
             'grade': resp.get('grade', grade),
-            'status_display': status_display
+            'status_display': 'Зачтено / Сдано'
         })
     except Exception as e:
         print(f"Error grading debt: {e}")
@@ -257,6 +256,7 @@ def my_subjects(request):
         'in_progress': 'В процессе',
         'passed': 'Зачтено / Сдано',
         'failed': 'Задолженность',
+        'closed': 'Зачтено / Сдано',
     }
 
     for debt in debts:
@@ -277,7 +277,18 @@ def my_subjects(request):
         debt['semester_display'] = f"{debt.get('semester', '?')} семестр"
         debt['academic_year_display'] = debt.get('academic_year', '')
         debt['status_display'] = STATUS_MAP.get(debt.get('status', ''), debt.get('status', 'Неизвестно'))
-        debt['grade'] = debt.get('grade', '')
+        
+        grade_raw = debt.get('grade')
+        if grade_raw:
+            if isinstance(grade_raw, str):
+                try:
+                    debt['grade'] = json.loads(grade_raw.replace("'", '"'))
+                except (json.JSONDecodeError, ValueError):
+                    debt['grade'] = {'type': 'pass_fail', 'value': grade_raw}
+            elif isinstance(grade_raw, dict):
+                debt['grade'] = grade_raw
+        else:
+            debt['grade'] = None
 
     grouped = OrderedDict()
     for debt in debts:
@@ -289,9 +300,16 @@ def my_subjects(request):
                 'department': debt['department'],
                 'teacher_name': debt['teacher_name'],
                 'teacher_department': debt['teacher_department'],
-                'debts': []
+                'debts': [],
+                'active_count': 0,
             }
         grouped[disc_id]['debts'].append(debt)
+        if debt.get('status') not in ('passed', 'closed'):
+            grouped[disc_id]['active_count'] += 1
+
+    grouped = OrderedDict(
+        (k, v) for k, v in grouped.items() if v['active_count'] > 0
+    )
 
     return render(request, 'subjects/my_subjects.html', {'grouped_enrollments': grouped})
 
@@ -306,3 +324,43 @@ def group_list(request):
         print(f"Error loading groups: {e}")
         groups = []
     return render(request, 'subjects/group_list.html', {'groups': groups})
+
+
+@login_required
+@user_passes_test(is_dean)
+def teachers_by_discipline(request):
+    discipline_id = request.GET.get('discipline_id')
+    if not discipline_id:
+        return JsonResponse({'error': 'discipline_id required'}, status=400)
+    api = EmulatorAPI()
+    try:
+        debts = api.get_debts(discipline_id=discipline_id)
+        teacher_ids = set(d.get('teacher_id') for d in debts if d.get('teacher_id'))
+        all_teachers = api.get_teachers()
+        teachers = []
+        for t in all_teachers:
+            if t.get('id') in teacher_ids:
+                full_name = ' '.join([t.get('last_name',''), t.get('first_name',''), t.get('middle_name','')]).strip()
+                teachers.append({
+                    'id': t['id'],
+                    'full_name': full_name or t.get('email', 'Без имени')
+                })
+        return JsonResponse({'teachers': teachers})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+def all_teachers(request):
+    """Возвращает список всех преподавателей для выбора в форме"""
+    api = EmulatorAPI()
+    try:
+        teachers = api.get_teachers()
+        result = []
+        for t in teachers:
+            full_name = f"{t.get('last_name', '')} {t.get('first_name', '')} {t.get('middle_name', '')}".strip()
+            result.append({
+                'id': t['id'],
+                'full_name': full_name or t.get('email', 'Без имени')
+            })
+        return JsonResponse({'teachers': result})
+    except Exception as e:
+        return JsonResponse({'teachers': [], 'error': str(e)}, status=500)

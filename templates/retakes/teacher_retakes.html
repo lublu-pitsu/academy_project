@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fa-solid fa-calendar-check me-2"></i>Мои пересдачи</h2>
+        <a href="{% url 'create_retake_request' %}" class="btn btn-outline-primary rounded-pill">
+            <i class="fa-solid fa-pen-to-square me-1"></i>Заявка на изменение
+        </a>
+    </div>
+    {% if retakes %}
+    <div class="row g-4">
+        {% for r in retakes %}
+        <div class="col-md-6">
+            <div class="glass-card p-4">
+                <h5>{{ r.discipline_name|default:"Без названия" }}</h5>
+                <div class="mb-2">
+                    <span class="badge bg-info">{{ r.type|default:"неизвестно" }}</span>
+                    <span class="badge bg-{% if r.status == 'scheduled' %}primary{% elif r.status == 'in_progress' %}warning text-dark{% elif r.status == 'completed' %}success{% else %}secondary{% endif %}">
+                        {% if r.status == 'scheduled' %}Назначена{% elif r.status == 'in_progress' %}Проводится{% elif r.status == 'completed' %}Завершена{% else %}{{ r.status }}{% endif %}
+                    </span>
+                </div>
+                <p><strong>Дата:</strong> {{ r.start_at|default:"не указана" }}</p>
+                <p><strong>Аудитория:</strong> {{ r.building_number|default:"-" }}-{{ r.classroom_number|default:"" }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5 glass-card">
+        <i class="fa-solid fa-calendar-xmark fa-3x text-muted mb-3"></i>
+        <h4>Нет назначенных пересдач</h4>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4 fade-in-up">
+    <h2 class="mb-4"><i class="fa-solid fa-calendar-plus me-2"></i>Назначить пересдачу</h2>
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    <div class="glass-card p-4">
+        <form method="post" id="retake-form">
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Дисциплина</label>
+                    <select name="discipline_id" id="discipline-select" class="form-select" required>
+                        <option value="">Выберите дисциплину</option>
+                        {% for d in disciplines %}
+                        <option value="{{ d.id }}" {% if form_data.discipline_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Тип пересдачи</label>
+                    <select name="type" id="retake-type" class="form-select">
+                        <option value="regular" {% if form_data.type == 'regular' %}selected{% endif %}>Обычная</option>
+                        <option value="commission" {% if form_data.type == 'commission' %}selected{% endif %}>С комиссией</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Дата и время начала</label>
+                    <input type="datetime-local" name="start_at" class="form-control" required value="{{ form_data.start_at }}">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Длительность (мин)</label>
+                    <input type="number" name="duration_minutes" class="form-control" required value="{{ form_data.duration_minutes|default:90 }}">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Корпус</label>
+                    <input type="text" name="building_number" class="form-control" required value="{{ form_data.building_number }}">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Аудитория</label>
+                    <input type="text" name="classroom_number" class="form-control" required value="{{ form_data.classroom_number }}">
+                </div>
+
+                <!-- Основные преподаватели (фиксированные) -->
+                <div class="col-12">
+                    <label class="form-label">Преподаватели дисциплины <span class="text-danger">*</span> <small class="text-muted">(обязательные, нельзя убрать)</small></label>
+                    <div id="main-teachers-container" class="border rounded-3 p-3 bg-light bg-opacity-25">
+                        <div id="main-teachers-list" class="d-flex flex-wrap gap-2">
+                            <span class="text-muted">Сначала выберите дисциплину</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Блок для дополнительных преподавателей (только для комиссии) -->
+                <div class="col-12" id="extra-teachers-block" style="display: none;">
+                    <label class="form-label">Дополнительные преподаватели (для комиссии) <span class="text-info">выберите не менее 2</span></label>
+                    <div class="border rounded-3 p-3 bg-light bg-opacity-25" style="max-height: 300px; overflow-y: auto;">
+                        <div id="extra-teachers-list" class="d-flex flex-wrap gap-2">
+                            <span class="text-muted">Загрузка списка...</span>
+                        </div>
+                    </div>
+                    <small class="text-muted">Нажмите на преподавателя, чтобы добавить/удалить. Зелёная галочка — добавлен в комиссию.</small>
+                </div>
+
+                <!-- Информация о студентах -->
+                <div class="col-12">
+                    <label class="form-label">Студенты (автоматически из долгов)</label>
+                    <div id="students-info" class="alert alert-info">
+                        Студенты будут добавлены автоматически после выбора дисциплины.
+                    </div>
+                    <input type="hidden" name="students" id="students-input">
+                </div>
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary rounded-pill" id="submit-btn" disabled>
+                    <i class="fa-solid fa-save me-1"></i>Создать пересдачу
+                </button>
+                <a href="{% url 'retake_summary' %}" class="btn btn-outline-secondary rounded-pill ms-2">Отмена</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Данные
+let allTeachers = [];            // все преподаватели системы {id, full_name}
+let mainTeacherIds = new Set();  // ID обязательных преподавателей (из дисциплины)
+let selectedExtraIds = new Set(); // ID выбранных дополнительных преподавателей
+
+// DOM элементы
+const disciplineSelect = document.getElementById('discipline-select');
+const retakeTypeSelect = document.getElementById('retake-type');
+const mainContainer = document.getElementById('main-teachers-list');
+const extraBlock = document.getElementById('extra-teachers-block');
+const extraList = document.getElementById('extra-teachers-list');
+const submitBtn = document.getElementById('submit-btn');
+const studentsInfo = document.getElementById('students-info');
+const studentsInput = document.getElementById('students-input');
+
+// Загружаем всех преподавателей при загрузке страницы
+async function loadAllTeachers() {
+    try {
+        const resp = await fetch('/subjects/all-teachers/');
+        const data = await resp.json();
+        allTeachers = data.teachers || [];
+        renderExtraTeachersList();
+    } catch (e) {
+        console.error('Ошибка загрузки преподавателей:', e);
+        extraList.innerHTML = '<span class="text-danger">Ошибка загрузки списка</span>';
+    }
+}
+
+// Рендер списка дополнительных преподавателей (все, кроме основных)
+function renderExtraTeachersList() {
+    if (!extraList) return;
+    const available = allTeachers.filter(t => !mainTeacherIds.has(t.id));
+    if (available.length === 0) {
+        extraList.innerHTML = '<span class="text-muted">Нет доступных преподавателей</span>';
+        return;
+    }
+    extraList.innerHTML = '';
+    available.forEach(teacher => {
+        const isSelected = selectedExtraIds.has(teacher.id);
+        const chip = document.createElement('div');
+        chip.className = `teacher-chip d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill ${isSelected ? 'bg-success text-white' : 'bg-white bg-opacity-75 text-dark'}`;
+        chip.style.cursor = 'pointer';
+        chip.style.transition = '0.2s';
+        chip.innerHTML = `
+            <span>${teacher.full_name}</span>
+            <i class="fa-solid ${isSelected ? 'fa-check-circle' : 'fa-plus-circle'}"></i>
+        `;
+        chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isSelected) {
+                selectedExtraIds.delete(teacher.id);
+            } else {
+                selectedExtraIds.add(teacher.id);
+            }
+            renderExtraTeachersList();
+            validateForm();
+        });
+        extraList.appendChild(chip);
+    });
+}
+
+// Рендер списка основных преподавателей (обязательные, без возможности удаления)
+function renderMainTeachers(teachers) {
+    if (!mainContainer) return;
+    mainTeacherIds.clear();
+    if (!teachers || teachers.length === 0) {
+        mainContainer.innerHTML = '<span class="text-muted">Нет преподавателей по этой дисциплине</span>';
+        return;
+    }
+    mainContainer.innerHTML = '';
+    teachers.forEach(teacher => {
+        mainTeacherIds.add(teacher.id);
+        const chip = document.createElement('div');
+        chip.className = 'teacher-chip d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill bg-primary text-white';
+        chip.innerHTML = `
+            <i class="fa-solid fa-chalkboard-user"></i>
+            <span>${teacher.full_name || teacher.name || 'Преподаватель'}</span>
+            <i class="fa-solid fa-check-circle"></i>
+        `;
+        mainContainer.appendChild(chip);
+    });
+    // После обновления основных – перерисовываем список дополнительных (исключая основные)
+    renderExtraTeachersList();
+}
+
+// Загрузка данных при выборе дисциплины
+disciplineSelect.addEventListener('change', async function() {
+    const disciplineId = this.value;
+    if (!disciplineId) {
+        mainContainer.innerHTML = '<span class="text-muted">Сначала выберите дисциплину</span>';
+        studentsInfo.innerHTML = 'Студенты будут добавлены автоматически после выбора дисциплины.';
+        studentsInput.value = '';
+        selectedExtraIds.clear();
+        renderExtraTeachersList();
+        validateForm();
+        return;
+    }
+
+    // Загружаем преподавателей дисциплины
+    try {
+        const resp = await fetch(`/subjects/teachers-by-discipline/?discipline_id=${disciplineId}`);
+        const data = await resp.json();
+        const teachers = data.teachers || [];
+        renderMainTeachers(teachers);
+    } catch (e) {
+        console.error(e);
+        mainContainer.innerHTML = '<span class="text-danger">Ошибка загрузки</span>';
+    }
+
+    // Загружаем студентов
+    try {
+        const resp = await fetch(`/retakes/students-with-debts/?discipline_id=${disciplineId}`);
+        const data = await resp.json();
+        const studentIds = data.student_ids || [];
+        studentsInfo.innerHTML = `<i class="fa-solid fa-users me-2"></i> Будет назначено <strong>${studentIds.length}</strong> студентов.`;
+        studentsInput.value = studentIds.join(',');
+    } catch (e) {
+        studentsInfo.innerHTML = '<span class="text-danger">Ошибка загрузки студентов</span>';
+    }
+    validateForm();
+});
+
+// Показываем/скрываем блок дополнительных преподавателей при смене типа
+retakeTypeSelect.addEventListener('change', function() {
+    const isCommission = this.value === 'commission';
+    extraBlock.style.display = isCommission ? 'block' : 'none';
+    if (!isCommission) {
+        selectedExtraIds.clear();
+        renderExtraTeachersList();
+    }
+    validateForm();
+});
+
+function validateForm() {
+    const isCommission = retakeTypeSelect.value === 'commission';
+    let valid = mainTeacherIds.size > 0;
+    if (isCommission) {
+        valid = valid && (selectedExtraIds.size >= 2);
+    }
+    submitBtn.disabled = !valid;
+}
+
+// При отправке формы собираем все ID преподавателей (основные + выбранные дополнительные)
+document.getElementById('retake-form').addEventListener('submit', function(e) {
+    // Удаляем старые hidden-поля teachers
+    const oldInputs = document.querySelectorAll('input[name="teachers"]');
+    oldInputs.forEach(input => input.remove());
+    // Добавляем основные
+    mainTeacherIds.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'teachers';
+        input.value = id;
+        this.appendChild(input);
+    });
+    // Добавляем дополнительные
+    if (retakeTypeSelect.value === 'commission') {
+        selectedExtraIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'teachers';
+            input.value = id;
+            this.appendChild(input);
+        });
+    }
+});
+
+// Инициализация
+loadAllTeachers();
+</script>
+{% endblock %}

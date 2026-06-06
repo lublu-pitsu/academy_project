@@ -8,4 +8,6 @@ urlpatterns = [
     path('grade/<uuid:enrollment_pk>/', views.update_grade, name='update_grade'),
     path('my/', views.my_subjects, name='my_subjects'),
     path('groups/', views.group_list, name='group_list'),
+    path('teachers-by-discipline/', views.teachers_by_discipline, name='teachers_by_discipline'),
+    path('all-teachers/', views.all_teachers, name='all_teachers'),
 ]
